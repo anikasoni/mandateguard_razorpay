@@ -1,0 +1,37 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+pytest-cache-files-*/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+
+# IDE and operating system
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local runtime data
+var/*
+!var/.gitkeep
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
