@@ -1,0 +1,3 @@
+Alembic migration infrastructure for MandateGuard.
+
+Phase 1 intentionally contains no domain tables and therefore no migration revisions.
