@@ -3,7 +3,7 @@
 MandateGuard is being built as a deterministic policy gateway for AI purchasing agents. The
 agent may propose commerce actions, but backend code alone enforces financial mandates. The
 repository currently contains the Phase 1 foundation, the pure Phase 2A policy engine, and the
-Phase 2B persistence and transactional policy-orchestration layer.
+Phase 2B persistence layer, plus the Phase 2C policy API and explicit human approval lifecycle.
 
 ## Implemented capabilities
 
@@ -15,11 +15,15 @@ Phase 2B persistence and transactional policy-orchestration layer.
   approvals, checkout attempts, and append-only audit events.
 - Phase 2B: Alembic schema migration, repository layer, and a transactional `PolicyService`
   using an explicit SQLite write transaction for atomic decisions, effects, and audits.
+- Phase 2C: one policy evaluation API for all four agent-visible tool contracts and an
+  environment-key-protected human approval endpoint.
+- Phase 2C: atomic, exact-bound, expiry-aware grant/reject decisions with append-only human
+  decision audits and idempotent identical retries.
 - Pydantic environment configuration and UTC-aware timestamp utilities.
 - Backend and frontend linting, typing, tests, builds, and CI.
 
-API routes for policy evaluation, an AI/LLM agent, Razorpay and payment/webhook handling,
-MandateBench, YAML loading, and product UI features remain future work. Phase 2B does not
+An AI/LLM agent, Razorpay and payment/webhook handling, MandateBench, YAML loading, and product
+UI features remain future work. Policy checkout results reserve local state only and do not
 execute an external checkout.
 
 ## Prerequisites
@@ -36,8 +40,8 @@ npm.cmd --prefix frontend ci
 conda run -n mandate python -m alembic -c backend/alembic.ini upgrade head
 ```
 
-No secrets are required for the currently implemented phases. Future credentials must be
-supplied only through environment variables and must never be committed.
+Health and policy evaluation require no secrets. The human approval endpoint requires the
+environment-only local-demo key documented below. Credentials must never be committed.
 
 ## Run locally
 
@@ -54,6 +58,16 @@ Health endpoints:
 
 - `GET /api/v1/health/live`
 - `GET /api/v1/health/ready`
+
+Policy endpoints:
+
+- `POST /api/v1/policy/evaluations`
+- `POST /api/v1/human/mandates/{mandate_id}/approvals/{approval_id}/decisions`
+
+The policy POST accepts the existing discriminated `ToolRequest` JSON contract. Policy blocks,
+approval routing, unknown mandates, and semantically malformed requests are successful,
+audited evaluations returned with HTTP 200. Every response explicitly reports
+`external_execution_authorized: false`.
 
 ## Verify
 
@@ -74,9 +88,16 @@ MANDATEGUARD_PENDING_APPROVAL_TTL_SECONDS=900
 MANDATEGUARD_CHECKOUT_RESERVATION_TTL_SECONDS=300
 ```
 
-Phase 2B persists policy state and audit decisions transactionally. It does not execute an
-external checkout: a replay only returns the existing stored record and never authorizes an
-external side effect.
+The human-only grant/reject endpoint is disabled until a private local-demo key of at least 16
+characters is provided. Send the same value in `X-MandateGuard-Human-Key`; never expose it to an
+agent or commit a real value:
+
+```text
+MANDATEGUARD_HUMAN_APPROVAL_KEY=<private-local-demo-value>
+```
+
+Policy state, policy audits, and human approval decisions are persisted transactionally. A
+replay only returns the existing stored record and never authorizes an external side effect.
 
 ## Architecture boundary
 
@@ -87,7 +108,8 @@ of the implementation they assess.
 
 ## Limitations
 
-The repository is not yet a complete product: it has no policy API transport, external checkout
-executor, payment provider integration, agent integration, product workflow, or benchmark.
-Future benchmark evidence will not be exhaustive proof, and MandateGuard does not claim
-equivalence with Razorpay's internal certification pipeline.
+The repository is not yet a complete product: it has no external checkout executor, payment
+provider integration, agent integration, product workflow, or benchmark. The local human API
+key is a demo trust boundary, not production authentication. Future benchmark evidence will not
+be exhaustive proof, and MandateGuard does not claim equivalence with Razorpay's internal
+certification pipeline.

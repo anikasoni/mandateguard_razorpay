@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from mandateguard.api.errors import install_error_handlers
 from mandateguard.api.router import api_router
 from mandateguard.core.config import Settings, get_settings
 from mandateguard.core.logging import configure_logging
@@ -41,9 +42,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origins,
         allow_credentials=False,
-        allow_methods=["GET"],
-        allow_headers=["Content-Type"],
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "X-MandateGuard-Human-Key"],
     )
+    install_error_handlers(application)
     application.include_router(api_router, prefix="/api/v1")
     return application
 

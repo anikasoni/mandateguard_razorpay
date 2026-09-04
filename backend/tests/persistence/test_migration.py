@@ -21,6 +21,7 @@ EXPECTED_TABLES = {
     "approvals",
     "checkout_attempts",
     "audit_events",
+    "approval_decision_events",
 }
 EXPECTED_COLUMNS: dict[str, dict[str, bool]] = {
     "mandates": {
@@ -89,6 +90,20 @@ EXPECTED_COLUMNS: dict[str, dict[str, bool]] = {
         "effect_approval_id": True,
         "effect_attempt_id": True,
     },
+    "approval_decision_events": {
+        "event_id": False,
+        "approval_id": False,
+        "mandate_id": False,
+        "checkout_intent_id": False,
+        "request_hash": False,
+        "amount_paise": False,
+        "currency": False,
+        "requested_decision": False,
+        "resulting_status": False,
+        "evaluated_at": False,
+        "replayed": False,
+        "actor_type": False,
+    },
 }
 EXPECTED_CHECKS = {
     "mandates": {
@@ -147,6 +162,19 @@ EXPECTED_CHECKS = {
         "audit_evidence_json_array",
         "audit_request_envelope_json_object",
     },
+    "approval_decision_events": {
+        "approval_decision_event_id_format",
+        "approval_decision_approval_id_format",
+        "approval_decision_mandate_id_format",
+        "approval_decision_intent_id_format",
+        "approval_decision_hash_format",
+        "approval_decision_amount_bounds",
+        "approval_decision_currency_inr",
+        "approval_decision_action_values",
+        "approval_decision_status_values",
+        "approval_decision_actor_type",
+        "approval_decision_replayed_boolean",
+    },
 }
 EXPECTED_UNIQUES = {
     "approvals": {"uq_approvals_exact_binding"},
@@ -159,6 +187,7 @@ EXPECTED_INDEXES = {
     "approvals": {"ix_approvals_mandate_intent", "uq_approvals_live_binding"},
     "checkout_attempts": {"ix_checkout_attempts_mandate_reservation"},
     "audit_events": {"ix_audit_events_mandate_time"},
+    "approval_decision_events": {"ix_approval_decision_events_approval_time"},
 }
 
 
@@ -270,6 +299,28 @@ def test_alembic_created_schema_has_exact_foreign_keys_and_delete_actions(
     assert foreign_keys("audit_events") == {
         (("effect_approval_id",), "approvals", ("approval_id",), "RESTRICT"),
         (("effect_attempt_id",), "checkout_attempts", ("attempt_id",), "RESTRICT"),
+    }
+    assert foreign_keys("approval_decision_events") == {
+        (
+            (
+                "mandate_id",
+                "approval_id",
+                "checkout_intent_id",
+                "request_hash",
+                "amount_paise",
+                "currency",
+            ),
+            "approvals",
+            (
+                "mandate_id",
+                "approval_id",
+                "checkout_intent_id",
+                "request_hash",
+                "amount_paise",
+                "currency",
+            ),
+            "RESTRICT",
+        )
     }
     with engine.connect() as connection:
         assert connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1
@@ -578,6 +629,58 @@ def test_migration_upgrade_downgrade_upgrade_round_trip(
                     "SELECT name FROM sqlite_master WHERE type='trigger'"
                 )
             }
-        assert triggers == {"trg_audit_events_no_update", "trg_audit_events_no_delete"}
+        assert triggers == {
+            "trg_audit_events_no_update",
+            "trg_audit_events_no_delete",
+            "trg_approval_decision_events_no_update",
+            "trg_approval_decision_events_no_delete",
+        }
     finally:
         upgraded_engine.dispose()
+
+
+def test_alembic_created_approval_decision_events_are_append_only(
+    migrated_database: tuple[Engine, Config],
+) -> None:
+    engine, _ = migrated_database
+    _seed_raw_state(engine)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "INSERT INTO approvals VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "approval-human",
+                "mandate-1",
+                "intent-human",
+                "0" * 64,
+                5,
+                "INR",
+                "granted",
+                "2026-09-01 00:00:00",
+                1,
+            ),
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO approval_decision_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "approval-audit-1",
+                "approval-human",
+                "mandate-1",
+                "intent-human",
+                "0" * 64,
+                5,
+                "INR",
+                "grant",
+                "granted",
+                "2026-08-30 12:00:00",
+                0,
+                "trusted_human",
+            ),
+        )
+    with engine.begin() as connection, pytest.raises(IntegrityError):
+        connection.exec_driver_sql(
+            "UPDATE approval_decision_events SET replayed = 1 WHERE event_id = 'approval-audit-1'"
+        )
+    with engine.begin() as connection, pytest.raises(IntegrityError):
+        connection.exec_driver_sql(
+            "DELETE FROM approval_decision_events WHERE event_id = 'approval-audit-1'"
+        )
