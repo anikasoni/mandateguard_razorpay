@@ -6,7 +6,10 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from mandateguard.core.config import get_settings
+from mandateguard.db import models as database_models
 from mandateguard.db.base import Base
+
+del database_models
 
 config = context.config
 
@@ -43,6 +46,9 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        if connection.dialect.name == "sqlite":
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+            connection.commit()
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

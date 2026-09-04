@@ -44,6 +44,125 @@ def test_untrusted_contract_failures_are_mg001_decisions(
     assert decision.request.raw_sha256
 
 
+def test_malformed_decision_matches_frozen_phase2a_vector(
+    state_factory: Callable[..., EvaluationState], now: datetime
+) -> None:
+    """Freeze the checked-in Phase 2A malformed-request contract across Phase 2B."""
+
+    raw = {
+        "request_id": "request-1",
+        "mandate_id": "mandate-1",
+        "tool": "create_checkout",
+        "arguments": {
+            "product_id": "product-1",
+            "checkout_intent_id": "intent-1",
+            "quantity": "2",
+            "currency": "INR",
+            "quoted_unit_price_paise": 5_000,
+            "price_version": 7,
+            "inventory_version": 4,
+            "approval_id": None,
+        },
+    }
+    decision = PolicyEngine().evaluate(raw, state_factory(), evaluated_at=now)
+
+    assert decision.request.model_dump(mode="json") == {
+        "request_id": "request-1",
+        "mandate_id": "mandate-1",
+        "tool": "create_checkout",
+        "field_names": ["arguments", "mandate_id", "request_id", "tool"],
+        "argument_field_names": [
+            "approval_id",
+            "checkout_intent_id",
+            "currency",
+            "inventory_version",
+            "price_version",
+            "product_id",
+            "quantity",
+            "quoted_unit_price_paise",
+        ],
+        "raw_sha256": "e7d6c21448a0e6fdc52fc56370960c3e0034b1b413816a32448ac74913307a45",
+        "semantic_sha256": "cde627fb93815ffd8b9dde8ebc656319fe19b0e8a6cf51890b0afb5f2ba18836",
+    }
+    assert [item.model_dump(mode="json") for item in decision.evidence] == [
+        {
+            "rule_id": "MG-001",
+            "status": "fail",
+            "reason": "request_contract_invalid",
+            "facts": [
+                {"key": "error_count", "value": 1},
+                {
+                    "key": "error_locations",
+                    "value": ["create_checkout.arguments.quantity"],
+                },
+            ],
+        },
+        {
+            "rule_id": "MG-002",
+            "status": "not_applicable",
+            "reason": "request_contract_invalid",
+            "facts": [],
+        },
+        {
+            "rule_id": "MG-003",
+            "status": "not_applicable",
+            "reason": "request_contract_invalid",
+            "facts": [],
+        },
+        {
+            "rule_id": "MG-004",
+            "status": "not_applicable",
+            "reason": "request_contract_invalid",
+            "facts": [],
+        },
+        {
+            "rule_id": "MG-005",
+            "status": "not_applicable",
+            "reason": "request_contract_invalid",
+            "facts": [],
+        },
+        {
+            "rule_id": "MG-006",
+            "status": "not_applicable",
+            "reason": "request_contract_invalid",
+            "facts": [],
+        },
+        {
+            "rule_id": "MG-007",
+            "status": "not_applicable",
+            "reason": "request_contract_invalid",
+            "facts": [],
+        },
+        {
+            "rule_id": "MG-008",
+            "status": "not_applicable",
+            "reason": "request_contract_invalid",
+            "facts": [],
+        },
+        {
+            "rule_id": "MG-009",
+            "status": "not_applicable",
+            "reason": "request_contract_invalid",
+            "facts": [],
+        },
+        {
+            "rule_id": "MG-010",
+            "status": "not_applicable",
+            "reason": "request_contract_invalid",
+            "facts": [],
+        },
+        {
+            "rule_id": "MG-011",
+            "status": "not_applicable",
+            "reason": "request_contract_invalid",
+            "facts": [],
+        },
+    ]
+    assert decision.fingerprint == (
+        "6e82feba81bbf58b9e0e9fcd85b8f6f3157347a6ba6b9db7fa883cb516a7bd0e"
+    )
+
+
 def test_mandate_identity_mismatch_is_mg001(
     request_factory: Callable[..., dict[str, Any]],
     state_factory: Callable[..., EvaluationState],
