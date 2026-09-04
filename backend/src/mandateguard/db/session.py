@@ -1,6 +1,7 @@
 """SQLAlchemy engine and session lifecycle."""
 
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from typing import cast
 
 from fastapi import Request
@@ -8,6 +9,14 @@ from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 SessionFactory = sessionmaker[Session]
+
+
+class FreshSessionRequiredError(RuntimeError):
+    """Raised when policy orchestration receives a session with prior work."""
+
+
+class UnsupportedPolicyDatabaseError(RuntimeError):
+    """Raised when the Phase 2B transaction strategy is used outside SQLite."""
 
 
 def create_database_engine(database_url: str) -> Engine:
@@ -36,6 +45,28 @@ def create_session_factory(engine: Engine) -> SessionFactory:
     """Create an application-scoped session factory bound to one engine."""
 
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+@contextmanager
+def immediate_policy_session(session_factory: SessionFactory) -> Iterator[Session]:
+    """Own one fresh SQLite session with BEGIN IMMEDIATE before application SQL."""
+
+    session = session_factory()
+    try:
+        if session.in_transaction():
+            raise FreshSessionRequiredError("PolicyService requires a fresh session")
+        connection = session.connection()
+        if connection.dialect.name != "sqlite":
+            raise UnsupportedPolicyDatabaseError("Phase 2B supports SQLite transactions only")
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+        session.info["mandateguard_begin_immediate"] = True
+        yield session
+        session.commit()
+    except BaseException:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 def get_engine(request: Request) -> Engine:
