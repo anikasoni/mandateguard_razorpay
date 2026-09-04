@@ -324,3 +324,78 @@ class AuditEventRecord(Base):
     effect_attempt_id: Mapped[str | None] = mapped_column(
         String(128), ForeignKey("checkout_attempts.attempt_id", ondelete="RESTRICT"), nullable=True
     )
+
+
+class ApprovalDecisionEventRecord(Base):
+    """Append-only record of an authenticated human approval decision."""
+
+    __tablename__ = "approval_decision_events"
+    __table_args__ = (
+        CheckConstraint(_identifier_check("event_id"), name="approval_decision_event_id_format"),
+        CheckConstraint(
+            _identifier_check("approval_id"), name="approval_decision_approval_id_format"
+        ),
+        CheckConstraint(
+            _identifier_check("mandate_id"), name="approval_decision_mandate_id_format"
+        ),
+        CheckConstraint(
+            _identifier_check("checkout_intent_id"), name="approval_decision_intent_id_format"
+        ),
+        CheckConstraint(_hash_check("request_hash"), name="approval_decision_hash_format"),
+        CheckConstraint(
+            _non_negative_integer_check("amount_paise"), name="approval_decision_amount_bounds"
+        ),
+        CheckConstraint("currency = 'INR'", name="approval_decision_currency_inr"),
+        CheckConstraint(
+            "requested_decision IN ('grant', 'reject')",
+            name="approval_decision_action_values",
+        ),
+        CheckConstraint(
+            "resulting_status IN ('granted', 'rejected')",
+            name="approval_decision_status_values",
+        ),
+        CheckConstraint("actor_type = 'trusted_human'", name="approval_decision_actor_type"),
+        CheckConstraint(
+            "typeof(replayed) = 'integer' AND replayed IN (0, 1)",
+            name="approval_decision_replayed_boolean",
+        ),
+        ForeignKeyConstraint(
+            [
+                "mandate_id",
+                "approval_id",
+                "checkout_intent_id",
+                "request_hash",
+                "amount_paise",
+                "currency",
+            ],
+            [
+                "approvals.mandate_id",
+                "approvals.approval_id",
+                "approvals.checkout_intent_id",
+                "approvals.request_hash",
+                "approvals.amount_paise",
+                "approvals.currency",
+            ],
+            name="fk_approval_decision_events_exact_binding",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_approval_decision_events_approval_time",
+            "approval_id",
+            "evaluated_at",
+            "event_id",
+        ),
+    )
+
+    event_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    approval_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    mandate_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    checkout_intent_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    amount_paise: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    requested_decision: Mapped[str] = mapped_column(String(8), nullable=False)
+    resulting_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    evaluated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    replayed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    actor_type: Mapped[str] = mapped_column(String(16), nullable=False)

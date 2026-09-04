@@ -21,6 +21,7 @@ from mandateguard.db.mappers import (
     product_to_record,
 )
 from mandateguard.db.models import (
+    ApprovalDecisionEventRecord,
     ApprovalRecord,
     AuditEventRecord,
     CheckoutAttemptRecord,
@@ -161,6 +162,74 @@ class ApprovalRepository:
         if approval is None:
             raise RepositoryConflictError("deactivated approval disappeared")
         return approval
+
+    def decide_pending(
+        self,
+        approval: Approval,
+        *,
+        status: ApprovalStatus,
+        evaluated_at: datetime,
+    ) -> Approval:
+        """Atomically decide one live pending approval with its exact stored binding."""
+
+        _require_immediate(self._session)
+        if status not in {ApprovalStatus.GRANTED, ApprovalStatus.REJECTED}:
+            raise ValueError("a human decision must grant or reject an approval")
+        result = self._session.execute(
+            update(ApprovalRecord)
+            .where(
+                ApprovalRecord.approval_id == approval.approval_id,
+                ApprovalRecord.mandate_id == approval.mandate_id,
+                ApprovalRecord.checkout_intent_id == approval.checkout_intent_id,
+                ApprovalRecord.request_hash == approval.request_hash,
+                ApprovalRecord.amount_paise == approval.amount_paise,
+                ApprovalRecord.currency == approval.currency,
+                ApprovalRecord.status == ApprovalStatus.PENDING.value,
+                ApprovalRecord.live_binding == 1,
+                ApprovalRecord.expires_at > evaluated_at,
+            )
+            .values(
+                status=status.value,
+                live_binding=1 if status is ApprovalStatus.GRANTED else 0,
+            )
+        )
+        if cast(CursorResult[Any], result).rowcount != 1:
+            raise RepositoryConflictError("pending approval could not be decided")
+        decided = self.get(approval.approval_id)
+        if decided is None:
+            raise RepositoryConflictError("decided approval disappeared")
+        return decided
+
+
+class ApprovalDecisionAuditRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def append(
+        self,
+        *,
+        event_id: str,
+        approval: Approval,
+        requested_decision: str,
+        evaluated_at: datetime,
+        replayed: bool,
+    ) -> ApprovalDecisionEventRecord:
+        record = ApprovalDecisionEventRecord(
+            event_id=event_id,
+            approval_id=approval.approval_id,
+            mandate_id=approval.mandate_id,
+            checkout_intent_id=approval.checkout_intent_id,
+            request_hash=approval.request_hash,
+            amount_paise=approval.amount_paise,
+            currency=approval.currency,
+            requested_decision=requested_decision,
+            resulting_status=approval.status.value,
+            evaluated_at=evaluated_at,
+            replayed=replayed,
+            actor_type="trusted_human",
+        )
+        self._session.add(record)
+        return record
 
 
 class CheckoutAttemptRepository:

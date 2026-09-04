@@ -13,6 +13,7 @@ def test_settings_use_safe_local_defaults() -> None:
     assert settings.database_url == "sqlite+pysqlite:///./var/mandateguard.db"
     assert settings.pending_approval_ttl_seconds == 900
     assert settings.checkout_reservation_ttl_seconds == 300
+    assert settings.human_approval_key is None
     assert settings.cors_origins == ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 
@@ -34,6 +35,12 @@ def test_cors_origins_reject_non_http_origins(monkeypatch: pytest.MonkeyPatch) -
 
     with pytest.raises(ValidationError, match="http:// or https://"):
         Settings(_env_file=None)
+
+
+def test_human_approval_key_is_optional_but_rejects_short_values() -> None:
+    assert Settings(_env_file=None, human_approval_key=None).human_approval_key is None
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, human_approval_key="too-short")
 
 
 @pytest.mark.parametrize(

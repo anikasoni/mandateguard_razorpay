@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+pysqlite:///./var/mandateguard.db"
     pending_approval_ttl_seconds: int = Field(default=900, ge=1, le=86_400)
     checkout_reservation_ttl_seconds: int = Field(default=300, ge=1, le=86_400)
+    human_approval_key: SecretStr | None = Field(default=None, min_length=16)
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
