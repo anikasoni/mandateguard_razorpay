@@ -8,8 +8,8 @@
 - `backend/migrations/` contains Alembic migration infrastructure.
 - `scripts/` contains local PowerShell workflows; `.github/workflows/` contains CI.
 - The PRD and revised TRD at the repository root are requirements documents. Preserve them.
-- Do not create future policy, agent, Razorpay, benchmark, catalog, or product-feature
-  directories until their phase is explicitly authorized.
+- New product capabilities must remain within the PRD/TRD and preserve the deterministic
+  backend authority boundary.
 
 ## Commands
 
@@ -46,7 +46,7 @@ npm.cmd --prefix frontend run build
 - Keep the product within the PRD/TRD scope and state limitations honestly. Do not claim
   equivalence with Razorpay's certification pipeline.
 
-## Phase 1 definition of done
+## Historical Phase 1 foundation
 
 - Root editable installation discovers `backend/src/mandateguard`.
 - Backend lint, formatting, typing, tests, coverage, health, and SQLite readiness checks pass.
@@ -54,6 +54,6 @@ npm.cmd --prefix frontend run build
 - Frontend dependency installation, lint, type-check, tests, and production build pass.
 - CI mirrors the local verification commands.
 - The PRD and TRD are unchanged.
-- No policy rules, agent, benchmark, catalog, payment, webhook, audit, mandate, or checkout
-  implementation exists.
+- Later phases may add policy, agent, benchmark, catalog, payment, audit, mandate, or checkout
+  behavior only when explicitly authorized and covered by tests.
 - Work remains uncommitted and unpushed unless the user explicitly authorizes Git operations.

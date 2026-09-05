@@ -43,6 +43,35 @@ def test_human_approval_key_is_optional_but_rejects_short_values() -> None:
         Settings(_env_file=None, human_approval_key="too-short")
 
 
+def test_razorpay_credentials_are_optional_or_a_complete_test_pair() -> None:
+    assert Settings(_env_file=None).razorpay_configured is False
+    configured = Settings(
+        _env_file=None,
+        razorpay_key_id="rzp_test_example",
+        razorpay_key_secret="example-secret",
+    )
+    assert configured.razorpay_configured is True
+
+
+@pytest.mark.parametrize(
+    ("key_id", "key_secret"),
+    [
+        ("rzp_test_example", None),
+        (None, "example-secret"),
+        ("rzp_live_forbidden", "example-secret"),
+    ],
+)
+def test_razorpay_credentials_reject_partial_or_live_configuration(
+    key_id: str | None, key_secret: str | None
+) -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            razorpay_key_id=key_id,
+            razorpay_key_secret=key_secret,
+        )
+
+
 @pytest.mark.parametrize(
     "name",
     [

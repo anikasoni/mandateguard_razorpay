@@ -3,7 +3,7 @@
 MandateGuard is being built as a deterministic policy gateway for AI purchasing agents. The
 agent may propose commerce actions, but backend code alone enforces financial mandates. The
 repository currently contains the Phase 1 foundation, the pure Phase 2A policy engine, and the
-Phase 2B persistence layer, plus the Phase 2C policy API and explicit human approval lifecycle.
+Phase 2B persistence layer, the Phase 2C API, and a demo-ready agent-to-payment vertical slice.
 
 ## Implemented capabilities
 
@@ -19,12 +19,20 @@ Phase 2B persistence layer, plus the Phase 2C policy API and explicit human appr
   environment-key-protected human approval endpoint.
 - Phase 2C: atomic, exact-bound, expiry-aware grant/reject decisions with append-only human
   decision audits and idempotent identical retries.
+- Demo: a bounded Gemini planner (with deterministic offline fallback) proposes a catalog item;
+  the backend executes every commerce tool through the deterministic policy service.
+- Demo: Razorpay test-mode Orders and backend-only HMAC payment verification. When no Razorpay
+  keys are configured, order creation is explicitly labelled `simulated`.
+- MandateBench: 20 frozen scenarios across mandate violations, offer truthfulness, and state
+  reliability, with per-scenario evidence and raw-agent/prompt-only proxy comparisons.
+- Product UI: live agent run, safety scenarios, human approval/resume, payment checkout, rule
+  evidence, fingerprints, and benchmark results.
 - Pydantic environment configuration and UTC-aware timestamp utilities.
 - Backend and frontend linting, typing, tests, builds, and CI.
 
-An AI/LLM agent, Razorpay and payment/webhook handling, MandateBench, YAML loading, and product
-UI features remain future work. Policy checkout results reserve local state only and do not
-execute an external checkout.
+Webhook ingestion, YAML policy loading, and production identity/access management remain future
+work. The demo creates Razorpay Orders only after a guarded local reservation; policy evaluation
+itself never authorizes an external side effect.
 
 ## Prerequisites
 
@@ -42,6 +50,16 @@ conda run -n mandate python -m alembic -c backend/alembic.ini upgrade head
 
 Health and policy evaluation require no secrets. The human approval endpoint requires the
 environment-only local-demo key documented below. Credentials must never be committed.
+
+For the full seeded demo, set a private human key in `.env`, optionally add Gemini and Razorpay
+test credentials, then run:
+
+```powershell
+.\scripts\demo.ps1
+```
+
+Without Gemini or Razorpay credentials the same workflow remains demonstrable using the labelled
+offline planner and simulated order mode. Live Razorpay keys are deliberately rejected.
 
 ## Run locally
 
@@ -63,6 +81,13 @@ Policy endpoints:
 
 - `POST /api/v1/policy/evaluations`
 - `POST /api/v1/human/mandates/{mandate_id}/approvals/{approval_id}/decisions`
+
+Demo endpoints:
+
+- `POST /api/v1/agent/runs`
+- `POST /api/v1/payments/orders`
+- `POST /api/v1/payments/verify` (called by the backend integration, never by the agent)
+- `GET /api/v1/benchmark/report`
 
 The policy POST accepts the existing discriminated `ToolRequest` JSON contract. Policy blocks,
 approval routing, unknown mandates, and semantically malformed requests are successful,
@@ -99,6 +124,27 @@ MANDATEGUARD_HUMAN_APPROVAL_KEY=<private-local-demo-value>
 Policy state, policy audits, and human approval decisions are persisted transactionally. A
 replay only returns the existing stored record and never authorizes an external side effect.
 
+Optional integrations use environment-only credentials:
+
+```text
+MANDATEGUARD_GEMINI_API_KEY=<private-gemini-api-key>
+MANDATEGUARD_GEMINI_MODEL=gemini-2.5-flash
+MANDATEGUARD_RAZORPAY_KEY_ID=<rzp_test_key-id>
+MANDATEGUARD_RAZORPAY_KEY_SECRET=<private-test-key-secret>
+```
+
+## MandateBench
+
+The benchmark contains 20 independently labelled fixtures: 10 mandate/boundary scenarios, six
+truthfulness scenarios, and four replay/state scenarios. It reports violation catch rate,
+false-block rate, decision accuracy, terminal rule, and the individual result for every case.
+The raw-agent and prompt-only columns are frozen illustrative proxies—not live LLM experiments or
+claims about a production model. Run the report with:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/benchmark/report
+```
+
 ## Architecture boundary
 
 All financial values are integer paise and all persisted timestamps are UTC-aware.
@@ -108,8 +154,9 @@ of the implementation they assess.
 
 ## Limitations
 
-The repository is not yet a complete product: it has no external checkout executor, payment
-provider integration, agent integration, product workflow, or benchmark. The local human API
-key is a demo trust boundary, not production authentication. Future benchmark evidence will not
-be exhaustive proof, and MandateGuard does not claim equivalence with Razorpay's internal
-certification pipeline.
+This is a hackathon prototype, not a production payment gateway. Its catalog and benchmark are
+synthetic; 20 scenarios are evidence, not exhaustive safety proof. The local human API key is a
+demo trust boundary, not production authentication. Razorpay support is test-mode Orders plus
+checkout-signature verification: webhook ingestion, refunds, an outbox for provider/DB crash
+recovery, and production reconciliation are intentionally absent. MandateGuard does not claim
+equivalence with Razorpay's internal certification pipeline.

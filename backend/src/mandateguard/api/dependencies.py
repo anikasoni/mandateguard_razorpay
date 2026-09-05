@@ -11,7 +11,9 @@ from mandateguard.api.errors import ApiError
 from mandateguard.core.config import Settings
 from mandateguard.core.time import utc_now
 from mandateguard.db.session import SessionFactory
+from mandateguard.services.agent import AgentRunService
 from mandateguard.services.approvals import HumanApprovalService
+from mandateguard.services.payments import PaymentService
 from mandateguard.services.policy import PolicyService
 
 _HUMAN_KEY = APIKeyHeader(name="X-MandateGuard-Human-Key", auto_error=False)
@@ -53,6 +55,20 @@ def get_human_approval_service(
     session_factory: Annotated[SessionFactory, Depends(get_session_factory)],
 ) -> HumanApprovalService:
     return HumanApprovalService(session_factory)
+
+
+def get_payment_service(
+    session_factory: Annotated[SessionFactory, Depends(get_session_factory)],
+    settings: Annotated[Settings, Depends(get_settings_from_app)],
+) -> PaymentService:
+    return PaymentService(session_factory, settings)
+
+
+def get_agent_run_service(
+    session_factory: Annotated[SessionFactory, Depends(get_session_factory)],
+    settings: Annotated[Settings, Depends(get_settings_from_app)],
+) -> AgentRunService:
+    return AgentRunService(session_factory, settings)
 
 
 def require_human_key(

@@ -22,6 +22,7 @@ EXPECTED_TABLES = {
     "checkout_attempts",
     "audit_events",
     "approval_decision_events",
+    "payment_orders",
 }
 EXPECTED_COLUMNS: dict[str, dict[str, bool]] = {
     "mandates": {
@@ -104,6 +105,18 @@ EXPECTED_COLUMNS: dict[str, dict[str, bool]] = {
         "replayed": False,
         "actor_type": False,
     },
+    "payment_orders": {
+        "provider_order_id": False,
+        "attempt_id": False,
+        "receipt": False,
+        "amount_paise": False,
+        "currency": False,
+        "provider_mode": False,
+        "status": False,
+        "provider_payment_id": True,
+        "created_at": False,
+        "paid_at": True,
+    },
 }
 EXPECTED_CHECKS = {
     "mandates": {
@@ -175,12 +188,28 @@ EXPECTED_CHECKS = {
         "approval_decision_actor_type",
         "approval_decision_replayed_boolean",
     },
+    "payment_orders": {
+        "payment_order_id_format",
+        "payment_order_attempt_id_format",
+        "payment_order_receipt_format",
+        "payment_order_amount",
+        "payment_order_currency_inr",
+        "payment_order_mode",
+        "payment_order_status",
+        "payment_order_state",
+        "payment_order_payment_id_format",
+    },
 }
 EXPECTED_UNIQUES = {
     "approvals": {"uq_approvals_exact_binding"},
     "checkout_attempts": {
         "uq_checkout_attempts_idempotency_key",
         "uq_checkout_attempts_mandate_intent",
+    },
+    "payment_orders": {
+        "uq_payment_orders_attempt",
+        "uq_payment_orders_receipt",
+        "uq_payment_orders_payment",
     },
 }
 EXPECTED_INDEXES = {
@@ -321,6 +350,9 @@ def test_alembic_created_schema_has_exact_foreign_keys_and_delete_actions(
             ),
             "RESTRICT",
         )
+    }
+    assert foreign_keys("payment_orders") == {
+        (("attempt_id",), "checkout_attempts", ("attempt_id",), "RESTRICT")
     }
     with engine.connect() as connection:
         assert connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1
