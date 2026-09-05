@@ -87,7 +87,7 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'MandateGuard' })).toBeInTheDocument()
     expect(await screen.findByText('Backend ready')).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:8000/api/v1/health/ready',
+      '/api/v1/health/ready',
       expect.objectContaining({ headers: { Accept: 'application/json' } }),
     )
   })

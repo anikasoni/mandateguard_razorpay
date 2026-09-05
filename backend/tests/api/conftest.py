@@ -10,6 +10,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 
+from mandateguard.api.dependencies import get_evaluated_at
 from mandateguard.core.config import Settings, get_settings
 from mandateguard.db.repositories import MandateRepository, ProductRepository
 from mandateguard.db.session import create_database_engine, create_session_factory
@@ -74,7 +75,9 @@ def api_client(
         human_approval_key=HUMAN_KEY,
         cors_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     )
-    with TestClient(create_app(settings)) as client:
+    application = create_app(settings)
+    application.dependency_overrides[get_evaluated_at] = lambda: NOW
+    with TestClient(application) as client:
         yield client
 
 

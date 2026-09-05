@@ -72,6 +72,41 @@ are available at `http://127.0.0.1:8000/docs`.
 The backend permits both `http://localhost:5173` and `http://127.0.0.1:5173` as local UI
 origins by default; wildcard origins are not enabled.
 
+## Railway hackathon deployment
+
+Create one Railway service from this repository with the repository root left as the service
+root. The checked-in `railway.json` selects the root `Dockerfile`, readiness endpoint, and
+restart policy; leave the dashboard start command empty so the image entrypoint is used. Set the
+service to exactly one replica, generate one public HTTPS domain, and attach one volume mounted
+at `/data`.
+
+Set these Railway service variables, replacing placeholders with private values and the domain
+Railway generated:
+
+```text
+MANDATEGUARD_ENVIRONMENT=production
+MANDATEGUARD_LOG_LEVEL=INFO
+MANDATEGUARD_DATABASE_URL=sqlite:////data/mandateguard.db
+MANDATEGUARD_CORS_ORIGINS=https://<your-generated-domain>
+MANDATEGUARD_HUMAN_APPROVAL_KEY=<private-value-at-least-16-characters>
+MANDATEGUARD_GEMINI_API_KEY=<private-gemini-api-key>
+MANDATEGUARD_GEMINI_MODEL=gemini-3.1-flash-lite
+MANDATEGUARD_RAZORPAY_KEY_ID=<rzp_test_key_id>
+MANDATEGUARD_RAZORPAY_KEY_SECRET=<private-test-key-secret>
+RAILWAY_RUN_UID=0
+```
+
+Do not set `PORT`; Railway supplies it. Gemini and Razorpay credentials remain backend-only and
+are not Docker build arguments or Vite variables. Razorpay accepts test-mode keys only. The
+human approval key is a demo trust boundary and is entered by the human operator when needed;
+it is not embedded in the frontend bundle.
+
+Railway mounts volumes as root, so this deployment uses `RAILWAY_RUN_UID=0` and the container
+process runs as root to write `/data`. This is an explicit hackathon limitation. The SQLite
+volume also requires the service to remain at one replica. Migrations and the idempotent
+synthetic demo seed run on every container start before one Uvicorn worker begins accepting
+traffic.
+
 Health endpoints:
 
 - `GET /api/v1/health/live`
@@ -128,7 +163,7 @@ Optional integrations use environment-only credentials:
 
 ```text
 MANDATEGUARD_GEMINI_API_KEY=<private-gemini-api-key>
-MANDATEGUARD_GEMINI_MODEL=gemini-2.5-flash
+MANDATEGUARD_GEMINI_MODEL=gemini-3.1-flash-lite
 MANDATEGUARD_RAZORPAY_KEY_ID=<rzp_test_key-id>
 MANDATEGUARD_RAZORPAY_KEY_SECRET=<private-test-key-secret>
 ```
