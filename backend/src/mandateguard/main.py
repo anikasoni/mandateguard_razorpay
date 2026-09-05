@@ -11,6 +11,7 @@ from mandateguard.api.router import api_router
 from mandateguard.core.config import Settings, get_settings
 from mandateguard.core.logging import configure_logging
 from mandateguard.db.session import create_database_engine, create_session_factory
+from mandateguard.frontend import install_frontend
 
 
 @asynccontextmanager
@@ -47,6 +48,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     install_error_handlers(application)
     application.include_router(api_router, prefix="/api/v1")
+    if resolved_settings.frontend_dist_dir is not None:
+        install_frontend(application, resolved_settings.frontend_dist_dir)
     return application
 
 

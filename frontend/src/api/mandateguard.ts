@@ -1,9 +1,7 @@
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '')
-
 export type DecisionOutcome = 'allow' | 'block' | 'request_approval'
 export interface EvidenceFact { key: string; value: string | number | boolean | null | Array<string | number | boolean | null> }
 export interface RuleEvidence { rule_id: string; status: 'pass' | 'fail' | 'not_applicable'; reason: string; facts: EvidenceFact[] }
-export interface Decision { outcome: DecisionOutcome; rule_id: string; reason: string; evidence: RuleEvidence[]; execution_mode: 'execute' | 'replay' | 'retry_existing' | 'none'; fingerprint: string; evaluated_at: string }
+export interface Decision { outcome: DecisionOutcome; rule_id: string; reason: string; evidence: RuleEvidence[]; execution_mode: 'execute' | 'replay' | 'retry_existing' | 'none'; fingerprint: string; evaluated_at: string; request: { request_id: string | null; mandate_id: string | null; tool: string | null } }
 export interface Approval { approval_id: string; mandate_id: string; checkout_intent_id: string; status: string; amount_paise: number; expires_at: string }
 export interface CheckoutAttempt { attempt_id: string; checkout_intent_id: string; amount_paise: number; status: string }
 export interface PolicyStep { audit_event_id: string; decision: Decision; approval: Approval | null; checkout_attempt: CheckoutAttempt | null }
@@ -13,7 +11,7 @@ export interface BenchmarkRow { scenario_id: string; family: string; description
 export interface BenchmarkReport { scenario_count: number; gold_passed: number; baseline_note: string; metrics: Record<string, { violation_catch_rate: number; false_block_rate: number; decision_accuracy: number }>; rows: BenchmarkRow[] }
 
 async function post<T>(path: string, body: unknown, headers: Record<string, string> = {}): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }, body: JSON.stringify(body) })
+  const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }, body: JSON.stringify(body) })
   const payload: unknown = await response.json()
   if (!response.ok) throw new Error(typeof payload === 'object' && payload !== null ? JSON.stringify(payload) : `HTTP ${response.status}`)
   return payload as T
@@ -24,7 +22,7 @@ export function evaluatePolicy(request: unknown): Promise<PolicyStep & { externa
 export function decideApproval(approval: Approval, key: string, decision: 'grant' | 'reject') { return post<{ approval: Approval; replayed: boolean }>(`/api/v1/human/mandates/${approval.mandate_id}/approvals/${approval.approval_id}/decisions`, { checkout_intent_id: approval.checkout_intent_id, decision }, { 'X-MandateGuard-Human-Key': key }) }
 export function createPaymentOrder(attemptId: string): Promise<PaymentOrder> { return post('/api/v1/payments/orders', { attempt_id: attemptId }) }
 export function verifyPayment(response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }): Promise<{ status: 'paid' }> { return post('/api/v1/payments/verify', { provider_order_id: response.razorpay_order_id, provider_payment_id: response.razorpay_payment_id, signature: response.razorpay_signature }) }
-export async function fetchBenchmark(): Promise<BenchmarkReport> { const response = await fetch(`${API_BASE}/api/v1/benchmark/report`, { headers: { Accept: 'application/json' } }); if (!response.ok) throw new Error(`Benchmark failed with HTTP ${response.status}`); return response.json() as Promise<BenchmarkReport> }
+export async function fetchBenchmark(): Promise<BenchmarkReport> { const response = await fetch('/api/v1/benchmark/report', { headers: { Accept: 'application/json' } }); if (!response.ok) throw new Error(`Benchmark failed with HTTP ${response.status}`); return response.json() as Promise<BenchmarkReport> }
 
 interface RazorpaySuccess { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }
 type RazorpayConstructor = new (options: Record<string, unknown>) => { open: () => void }

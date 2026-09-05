@@ -12,11 +12,6 @@ export interface ReadinessRequestOptions {
 
 export const DEFAULT_READINESS_TIMEOUT_MS = 5_000
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(
-  /\/$/,
-  '',
-)
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -96,7 +91,7 @@ export async function fetchReadiness(
   }, timeoutMs)
 
   try {
-    const response = await fetch(`${apiBaseUrl}/api/v1/health/ready`, {
+    const response = await fetch('/api/v1/health/ready', {
       headers: { Accept: 'application/json' },
       signal: requestController.signal,
     })

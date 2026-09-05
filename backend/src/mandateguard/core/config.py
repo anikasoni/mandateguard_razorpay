@@ -1,6 +1,7 @@
 """Environment-backed application configuration."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal, Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -21,11 +22,12 @@ class Settings(BaseSettings):
 
     environment: Literal["development", "test", "production"] = "development"
     database_url: str = "sqlite+pysqlite:///./var/mandateguard.db"
+    frontend_dist_dir: Path | None = None
     pending_approval_ttl_seconds: int = Field(default=900, ge=1, le=86_400)
     checkout_reservation_ttl_seconds: int = Field(default=300, ge=1, le=86_400)
     human_approval_key: SecretStr | None = Field(default=None, min_length=16)
     gemini_api_key: SecretStr | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.1-flash-lite"
     razorpay_key_id: str | None = Field(default=None, min_length=8)
     razorpay_key_secret: SecretStr | None = Field(default=None, min_length=8)
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
