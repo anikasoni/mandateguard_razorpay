@@ -1,17 +1,19 @@
 """Idempotently seed the explicitly synthetic MandateGuard demo catalog."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timedelta
 
 from mandateguard.core.config import get_settings
+from mandateguard.core.time import normalize_utc, utc_now
 from mandateguard.db.repositories import MandateRepository, ProductRepository
 from mandateguard.db.session import SessionFactory, create_database_engine, create_session_factory
 from mandateguard.domain import Mandate, Product
 from mandateguard.domain.enums import MandateStatus
 
 DEMO_MANDATE_ID = "mandate-demo"
+DEMO_DATA_VALIDITY = timedelta(days=365)
 
 
-def demo_mandate() -> Mandate:
+def demo_mandate(*, seeded_at: datetime) -> Mandate:
     return Mandate(
         mandate_id=DEMO_MANDATE_ID,
         status=MandateStatus.ACTIVE,
@@ -21,12 +23,12 @@ def demo_mandate() -> Mandate:
         approval_threshold_paise=200_000,
         approved_merchants=frozenset({"lumin", "audion", "ergoworks"}),
         approved_categories=frozenset({"home", "electronics", "furniture"}),
-        expires_at=datetime(2099, 1, 1, tzinfo=UTC),
+        expires_at=seeded_at + DEMO_DATA_VALIDITY,
     )
 
 
-def demo_products() -> tuple[Product, ...]:
-    expiry = datetime(2099, 1, 1, tzinfo=UTC)
+def demo_products(*, seeded_at: datetime) -> tuple[Product, ...]:
+    expiry = seeded_at + DEMO_DATA_VALIDITY
     return (
         Product(
             product_id="desk-lamp",
@@ -79,13 +81,14 @@ def demo_products() -> tuple[Product, ...]:
     )
 
 
-def seed_demo_data(session_factory: SessionFactory) -> None:
+def seed_demo_data(session_factory: SessionFactory, *, seeded_at: datetime | None = None) -> None:
+    timestamp = normalize_utc(seeded_at or utc_now())
     with session_factory.begin() as session:
         mandates = MandateRepository(session)
         products = ProductRepository(session)
         if mandates.get(DEMO_MANDATE_ID) is None:
-            mandates.add(demo_mandate())
-        for product in demo_products():
+            mandates.add(demo_mandate(seeded_at=timestamp))
+        for product in demo_products(seeded_at=timestamp):
             if products.get(product.product_id) is None:
                 products.add(product)
 

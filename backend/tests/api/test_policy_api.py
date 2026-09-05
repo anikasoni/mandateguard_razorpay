@@ -1,7 +1,7 @@
 """Policy API integration behavior."""
 
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 
 from mandateguard.api.dependencies import get_evaluated_at, get_policy_service
-from mandateguard.db.models import AuditEventRecord, CheckoutAttemptRecord
+from mandateguard.db.models import AuditEventRecord, CheckoutAttemptRecord, MandateRecord
 
 
 def _count(client: TestClient, model: type[Any]) -> int:
@@ -45,6 +45,40 @@ def test_every_policy_tool_success_path(
     assert body["decision"]["evaluated_at"].endswith("Z")
     assert body["external_execution_authorized"] is False
     assert len(body["decision"]["fingerprint"]) == 64
+
+
+@pytest.mark.parametrize(
+    ("evaluation_offset", "expected_outcome", "expected_reason"),
+    [
+        (timedelta(microseconds=-1), "allow", "all_applicable_rules_passed"),
+        (timedelta(0), "block", "mandate_expired"),
+        (timedelta(microseconds=1), "block", "mandate_expired"),
+    ],
+    ids=("immediately-before-expiry", "at-expiry", "immediately-after-expiry"),
+)
+def test_mandate_expiry_uses_controlled_backend_evaluation_time(
+    evaluation_offset: timedelta,
+    expected_outcome: str,
+    expected_reason: str,
+    api_client: TestClient,
+    request_factory: Callable[..., dict[str, Any]],
+    now: datetime,
+) -> None:
+    expires_at = now + timedelta(days=1)
+    api_client.app.dependency_overrides[get_evaluated_at] = lambda: expires_at + evaluation_offset
+
+    response = api_client.post("/api/v1/policy/evaluations", json=request_factory("get_product"))
+
+    assert response.status_code == 200
+    decision = response.json()["decision"]
+    assert (decision["outcome"], decision["reason"]) == (
+        expected_outcome,
+        expected_reason,
+    )
+    if expected_outcome == "block":
+        assert decision["rule_id"] == "MG-003"
+    with api_client.app.state.database_session_factory() as session:
+        assert session.get(MandateRecord, "mandate-1").expires_at == expires_at
 
 
 def test_malformed_unknown_and_invalid_json_behavior(
