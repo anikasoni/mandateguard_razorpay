@@ -28,6 +28,7 @@ from mandateguard.db.models import (
     MandateCategoryScopeRecord,
     MandateMerchantScopeRecord,
     MandateRecord,
+    PaymentOrderRecord,
     ProductRecord,
 )
 from mandateguard.domain.enums import ApprovalStatus, CheckoutStatus
@@ -87,6 +88,10 @@ class ProductRepository:
     def get(self, product_id: str) -> Product | None:
         record = self._session.get(ProductRecord, product_id)
         return product_from_record(record) if record is not None else None
+
+    def list_all(self) -> tuple[Product, ...]:
+        records = self._session.scalars(select(ProductRecord).order_by(ProductRecord.product_id))
+        return tuple(product_from_record(record) for record in records)
 
 
 class ApprovalRepository:
@@ -248,6 +253,44 @@ class CheckoutAttemptRepository:
         )
         return checkout_attempt_from_record(record) if record is not None else None
 
+    def get(self, attempt_id: str) -> CheckoutAttempt | None:
+        record = self._session.get(CheckoutAttemptRecord, attempt_id)
+        return checkout_attempt_from_record(record) if record is not None else None
+
+    def mark_created(self, attempt_id: str) -> CheckoutAttempt:
+        _require_immediate(self._session)
+        result = self._session.execute(
+            update(CheckoutAttemptRecord)
+            .where(
+                CheckoutAttemptRecord.attempt_id == attempt_id,
+                CheckoutAttemptRecord.status == CheckoutStatus.RESERVED.value,
+            )
+            .values(status=CheckoutStatus.CREATED.value)
+        )
+        if cast(CursorResult[Any], result).rowcount != 1:
+            raise RepositoryConflictError("reserved checkout could not be marked created")
+        attempt = self.get(attempt_id)
+        if attempt is None:
+            raise RepositoryConflictError("created checkout disappeared")
+        return attempt
+
+    def mark_completed(self, attempt_id: str) -> CheckoutAttempt:
+        _require_immediate(self._session)
+        result = self._session.execute(
+            update(CheckoutAttemptRecord)
+            .where(
+                CheckoutAttemptRecord.attempt_id == attempt_id,
+                CheckoutAttemptRecord.status == CheckoutStatus.CREATED.value,
+            )
+            .values(status=CheckoutStatus.COMPLETED.value, reservation_expires_at=None)
+        )
+        if cast(CursorResult[Any], result).rowcount != 1:
+            raise RepositoryConflictError("created checkout could not be marked completed")
+        attempt = self.get(attempt_id)
+        if attempt is None:
+            raise RepositoryConflictError("completed checkout disappeared")
+        return attempt
+
     def list_for_mandate(self, mandate_id: str) -> tuple[CheckoutAttempt, ...]:
         records = self._session.scalars(
             select(CheckoutAttemptRecord)
@@ -335,3 +378,47 @@ class AuditRepository:
         return tuple(
             decision_from_audit_record(record) for record in self._session.scalars(statement)
         )
+
+
+class PaymentOrderRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get_by_attempt(self, attempt_id: str) -> PaymentOrderRecord | None:
+        return self._session.scalar(
+            select(PaymentOrderRecord).where(PaymentOrderRecord.attempt_id == attempt_id)
+        )
+
+    def get(self, provider_order_id: str) -> PaymentOrderRecord | None:
+        return self._session.get(PaymentOrderRecord, provider_order_id)
+
+    def add(self, record: PaymentOrderRecord) -> None:
+        _require_immediate(self._session)
+        self._session.add(record)
+
+    def mark_paid(
+        self,
+        provider_order_id: str,
+        *,
+        provider_payment_id: str,
+        paid_at: datetime,
+    ) -> PaymentOrderRecord:
+        _require_immediate(self._session)
+        result = self._session.execute(
+            update(PaymentOrderRecord)
+            .where(
+                PaymentOrderRecord.provider_order_id == provider_order_id,
+                PaymentOrderRecord.status == "created",
+            )
+            .values(
+                status="paid",
+                provider_payment_id=provider_payment_id,
+                paid_at=paid_at,
+            )
+        )
+        if cast(CursorResult[Any], result).rowcount != 1:
+            raise RepositoryConflictError("payment order could not be marked paid")
+        record = self.get(provider_order_id)
+        if record is None:
+            raise RepositoryConflictError("paid order disappeared")
+        return record

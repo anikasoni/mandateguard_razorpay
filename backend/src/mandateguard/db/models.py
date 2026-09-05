@@ -399,3 +399,48 @@ class ApprovalDecisionEventRecord(Base):
     evaluated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     replayed: Mapped[bool] = mapped_column(Boolean, nullable=False)
     actor_type: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
+class PaymentOrderRecord(Base):
+    """One Razorpay test order (or explicit offline simulation) per guarded attempt."""
+
+    __tablename__ = "payment_orders"
+    __table_args__ = (
+        CheckConstraint(_identifier_check("provider_order_id"), name="payment_order_id_format"),
+        CheckConstraint(_identifier_check("attempt_id"), name="payment_order_attempt_id_format"),
+        CheckConstraint(_identifier_check("receipt"), name="payment_order_receipt_format"),
+        CheckConstraint(_non_negative_integer_check("amount_paise"), name="payment_order_amount"),
+        CheckConstraint("currency = 'INR'", name="payment_order_currency_inr"),
+        CheckConstraint(
+            "provider_mode IN ('razorpay_test', 'simulated')", name="payment_order_mode"
+        ),
+        CheckConstraint("status IN ('created', 'paid')", name="payment_order_status"),
+        CheckConstraint(
+            "(status = 'created' AND provider_payment_id IS NULL AND paid_at IS NULL) OR "
+            "(status = 'paid' AND provider_mode = 'razorpay_test' "
+            "AND provider_payment_id IS NOT NULL AND paid_at IS NOT NULL)",
+            name="payment_order_state",
+        ),
+        CheckConstraint(
+            f"provider_payment_id IS NULL OR ({_identifier_check('provider_payment_id')})",
+            name="payment_order_payment_id_format",
+        ),
+        UniqueConstraint("attempt_id", name="uq_payment_orders_attempt"),
+        UniqueConstraint("receipt", name="uq_payment_orders_receipt"),
+        UniqueConstraint("provider_payment_id", name="uq_payment_orders_payment"),
+    )
+
+    provider_order_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    attempt_id: Mapped[str] = mapped_column(
+        String(128),
+        ForeignKey("checkout_attempts.attempt_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    receipt: Mapped[str] = mapped_column(String(128), nullable=False)
+    amount_paise: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    provider_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    provider_payment_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    paid_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

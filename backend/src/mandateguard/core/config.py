@@ -1,9 +1,9 @@
 """Environment-backed application configuration."""
 
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,8 +24,29 @@ class Settings(BaseSettings):
     pending_approval_ttl_seconds: int = Field(default=900, ge=1, le=86_400)
     checkout_reservation_ttl_seconds: int = Field(default=300, ge=1, le=86_400)
     human_approval_key: SecretStr | None = Field(default=None, min_length=16)
+    gemini_api_key: SecretStr | None = None
+    gemini_model: str = "gemini-2.5-flash"
+    razorpay_key_id: str | None = Field(default=None, min_length=8)
+    razorpay_key_secret: SecretStr | None = Field(default=None, min_length=8)
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+    @property
+    def razorpay_configured(self) -> bool:
+        """Return whether both credentials required for test-mode Orders exist."""
+
+        return self.razorpay_key_id is not None and self.razorpay_key_secret is not None
+
+    @model_validator(mode="after")
+    def require_test_mode_razorpay_pair(self) -> Self:
+        """Accept only a complete Razorpay test-key pair."""
+
+        configured = (self.razorpay_key_id is not None, self.razorpay_key_secret is not None)
+        if configured[0] != configured[1]:
+            raise ValueError("Razorpay key ID and secret must be configured together")
+        if self.razorpay_key_id is not None and not self.razorpay_key_id.startswith("rzp_test_"):
+            raise ValueError("only Razorpay test-mode key IDs are accepted")
+        return self
 
     @field_validator("cors_origins", mode="before")
     @classmethod
