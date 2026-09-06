@@ -34,7 +34,7 @@ flowchart LR
 
 Gemini—or the offline fallback—may select an item, quantity, and repeat a user's inventory claim. It cannot grant approval, set evaluation time, change trusted prices, authorize external execution, or verify payment.
 
-## A 60-second judge walkthrough
+## A  walkthrough
 
 1. Submit **“Buy one desk lamp.”** Its trusted price fits both limits, so the backend creates one reservation.
 2. Try **“Desk lamp — only 2 left.”** Catalog inventory says 12; MG-007 blocks the inconsistent claim.
